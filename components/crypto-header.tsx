@@ -48,12 +48,13 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useWallet } from "../hooks/use-wallet";
 
 export function CryptoHeader() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const { account, chainId, isConnected: isWalletConnected, connectWallet, disconnectWallet } = useWallet();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
@@ -99,17 +100,24 @@ export function CryptoHeader() {
     { label: "News", href: "/news" },
   ];
 
+  const getNetworkName = (id: string | null) => {
+    if (!id) return "Unknown";
+    switch (id) {
+      case "0x1": return "Mainnet";
+      case "0xaa36a7": return "Sepolia";
+      case "0x89": return "Polygon";
+      case "0xa4b1": return "Arbitrum";
+      case "0xa": return "Optimism";
+      case "0x38": return "BSC";
+      default: return "Network";
+    }
+  };
+
   const handleConnectWallet = () => {
     if (isWalletConnected) {
-      setIsWalletConnected(false);
-      toast.success("Wallet disconnected");
+      disconnectWallet();
     } else {
-      // Simulate wallet connection
-      toast.loading("Connecting wallet...");
-      setTimeout(() => {
-        setIsWalletConnected(true);
-        toast.success("Wallet connected successfully!");
-      }, 1500);
+      connectWallet();
     }
   };
 
@@ -119,7 +127,7 @@ export function CryptoHeader() {
 
   const handleSignOut = () => {
     toast.success("Signed out successfully");
-    setIsWalletConnected(false);
+    disconnectWallet();
   };
 
   const handleSettingsSave = () => {
@@ -376,6 +384,11 @@ export function CryptoHeader() {
             </DropdownMenu>
 
             {/* Connect Wallet Button */}
+            {isWalletConnected && chainId && (
+              <Badge variant="outline" className="hidden lg:flex border-primary text-primary bg-primary/10 mr-2">
+                {getNetworkName(chainId)}
+              </Badge>
+            )}
             <Button
               className={`hidden sm:flex ${
                 isWalletConnected
@@ -384,10 +397,10 @@ export function CryptoHeader() {
               } text-primary-foreground`}
               onClick={handleConnectWallet}
             >
-              {isWalletConnected ? (
+              {isWalletConnected && account ? (
                 <>
                   <Check className="h-4 w-4 mr-2" />
-                  Connected
+                  {`${account.slice(0, 6)}...${account.slice(-4)}`}
                 </>
               ) : (
                 <>
@@ -462,11 +475,18 @@ export function CryptoHeader() {
                   } text-primary-foreground`}
                   onClick={handleConnectWallet}
                 >
-                  {isWalletConnected ? (
-                    <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Connected
-                    </>
+                  {isWalletConnected && account ? (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center">
+                        <Check className="h-4 w-4 mr-2" />
+                        {`${account.slice(0, 6)}...${account.slice(-4)}`}
+                      </div>
+                      {chainId && (
+                        <Badge variant="outline" className="border-green-400 text-white bg-green-500/20 text-xs">
+                          {getNetworkName(chainId)}
+                        </Badge>
+                      )}
+                    </div>
                   ) : (
                     <>
                       <Wallet className="h-4 w-4 mr-2" />
