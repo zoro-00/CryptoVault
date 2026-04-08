@@ -1,430 +1,331 @@
-// Trading service - Manage trades and orders
+// Trading service — Real DEX swap via ParaSwap (EVM) + Jupiter (Solana)
 import type { ApiResponse } from "@/lib/types";
+import { CHAIN_TO_PARASWAP_NETWORK } from "@/lib/tokens";
 
-export interface TradingPair {
-  id: string;
-  baseAsset: string;
-  quoteAsset: string;
-  symbol: string;
-  currentPrice: number;
-  priceChange24h: number;
-  volume24h: number;
-  high24h: number;
-  low24h: number;
+const PARASWAP_API = "https://api.paraswap.io";
+const JUPITER_API = "https://api.jup.ag/swap/v1";
+
+// ── ParaSwap (EVM) ─────────────────────────────────────────────────
+
+export interface ParaSwapQuote {
+  srcToken: string;
+  srcDecimals: number;
+  srcAmount: string;
+  destToken: string;
+  destDecimals: number;
+  destAmount: string;
+  gasCostUSD: string;
+  side: string;
+  contractAddress: string;
+  tokenTransferProxy: string;
+  priceRoute: any; // full route needed for building tx
 }
-
-export interface Order {
-  id: string;
-  userId: string;
-  pair: string;
-  type: "market" | "limit" | "stop";
-  side: "buy" | "sell";
-  amount: number;
-  price?: number;
-  stopPrice?: number;
-  status: "pending" | "filled" | "cancelled" | "rejected";
-  filledAmount: number;
-  totalValue: number;
-  fee: number;
-  createdAt: Date;
-  updatedAt: Date;
-  filledAt?: Date;
-}
-
-export interface Trade {
-  id: string;
-  orderId: string;
-  userId: string;
-  pair: string;
-  side: "buy" | "sell";
-  amount: number;
-  price: number;
-  totalValue: number;
-  fee: number;
-  executedAt: Date;
-}
-
-// In-memory storage for demo
-let orders: Map<string, Order[]> = new Map([
-  [
-    "demo-user",
-    [
-      {
-        id: "order-1",
-        userId: "demo-user",
-        pair: "BTC/USD",
-        type: "limit",
-        side: "buy",
-        amount: 0.1,
-        price: 42000,
-        status: "filled",
-        filledAmount: 0.1,
-        totalValue: 4200,
-        fee: 8.4,
-        createdAt: new Date("2024-02-10"),
-        updatedAt: new Date("2024-02-10"),
-        filledAt: new Date("2024-02-10"),
-      },
-      {
-        id: "order-2",
-        userId: "demo-user",
-        pair: "ETH/USD",
-        type: "market",
-        side: "buy",
-        amount: 2,
-        status: "filled",
-        filledAmount: 2,
-        totalValue: 5300,
-        fee: 10.6,
-        createdAt: new Date("2024-02-12"),
-        updatedAt: new Date("2024-02-12"),
-        filledAt: new Date("2024-02-12"),
-      },
-    ],
-  ],
-]);
-
-let trades: Map<string, Trade[]> = new Map();
-
-const TRADING_FEE_PERCENTAGE = 0.002; // 0.2% trading fee
 
 /**
- * Get available trading pairs
+ * Get a swap quote from ParaSwap.
  */
-export async function getTradingPairs(): Promise<ApiResponse<TradingPair[]>> {
+export async function getParaSwapQuote(params: {
+  srcToken: string;
+  destToken: string;
+  amount: string;       // in wei / smallest unit
+  srcDecimals: number;
+  destDecimals: number;
+  network: number;      // decimal chain ID
+  side?: "SELL" | "BUY";
+}): Promise<ApiResponse<ParaSwapQuote>> {
   try {
-    // Mock trading pairs
-    const pairs: TradingPair[] = [
-      {
-        id: "btc-usd",
-        baseAsset: "BTC",
-        quoteAsset: "USD",
-        symbol: "BTC/USD",
-        currentPrice: 43250.5,
-        priceChange24h: 2.45,
-        volume24h: 25400000000,
-        high24h: 43800.25,
-        low24h: 42100.75,
-      },
-      {
-        id: "eth-usd",
-        baseAsset: "ETH",
-        quoteAsset: "USD",
-        symbol: "ETH/USD",
-        currentPrice: 2650.75,
-        priceChange24h: -1.25,
-        volume24h: 12300000000,
-        high24h: 2720.5,
-        low24h: 2580.25,
-      },
-      {
-        id: "bnb-usd",
-        baseAsset: "BNB",
-        quoteAsset: "USD",
-        symbol: "BNB/USD",
-        currentPrice: 315.25,
-        priceChange24h: 0.85,
-        volume24h: 1850000000,
-        high24h: 320.75,
-        low24h: 310.5,
-      },
-    ];
+    const psNetwork = CHAIN_TO_PARASWAP_NETWORK[params.network];
+    if (!psNetwork) {
+      return { success: false, error: `Chain ${params.network} not supported by ParaSwap` };
+    }
 
+    const url = new URL(`${PARASWAP_API}/prices`);
+    url.searchParams.set("srcToken", params.srcToken);
+    url.searchParams.set("destToken", params.destToken);
+    url.searchParams.set("amount", params.amount);
+    url.searchParams.set("srcDecimals", String(params.srcDecimals));
+    url.searchParams.set("destDecimals", String(params.destDecimals));
+    url.searchParams.set("network", String(psNetwork));
+    url.searchParams.set("side", params.side || "SELL");
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("[paraswap] Quote error:", errBody);
+      return { success: false, error: `ParaSwap quote failed: ${res.status}` };
+    }
+
+    const data = await res.json();
+    if (data.error) {
+      return { success: false, error: data.error };
+    }
+
+    const route = data.priceRoute;
     return {
       success: true,
-      data: pairs,
+      data: {
+        srcToken: route.srcToken,
+        srcDecimals: route.srcDecimals,
+        srcAmount: route.srcAmount,
+        destToken: route.destToken,
+        destDecimals: route.destDecimals,
+        destAmount: route.destAmount,
+        gasCostUSD: route.gasCostUSD,
+        side: route.side,
+        contractAddress: route.contractAddress,
+        tokenTransferProxy: route.tokenTransferProxy,
+        priceRoute: route,
+      },
     };
   } catch (error) {
-    console.error("Get trading pairs error:", error);
+    console.error("[paraswap] getQuote error:", error);
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to get trading pairs",
-      data: [],
+      error: error instanceof Error ? error.message : "Quote failed",
     };
   }
 }
 
 /**
- * Get user's orders
+ * Build a swap transaction from ParaSwap.
+ * Returns tx data ready to be sent via MetaMask.
  */
-export async function getUserOrders(
-  userId: string,
-  options?: { status?: string; limit?: number },
-): Promise<ApiResponse<Order[]>> {
+export async function buildParaSwapTransaction(params: {
+  srcToken: string;
+  destToken: string;
+  srcAmount: string;
+  destAmount: string;
+  priceRoute: any;
+  userAddress: string;
+  network: number;
+  slippage?: number; // basis points, default 100 (1%)
+}): Promise<ApiResponse<{ to: string; data: string; value: string; chainId: number; gasPrice?: string }>> {
   try {
-    let userOrders = orders.get(userId) || [];
-
-    if (options?.status) {
-      userOrders = userOrders.filter((o) => o.status === options.status);
+    const psNetwork = CHAIN_TO_PARASWAP_NETWORK[params.network];
+    if (!psNetwork) {
+      return { success: false, error: `Chain ${params.network } not supported` };
     }
 
-    // Sort by date desc
-    userOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const slippage = params.slippage ?? 100; // 1% default
+    const minDestAmount = BigInt(params.destAmount) * BigInt(10000 - slippage) / BigInt(10000);
 
-    if (options?.limit) {
-      userOrders = userOrders.slice(0, options.limit);
+    const body = {
+      srcToken: params.srcToken,
+      destToken: params.destToken,
+      srcAmount: params.srcAmount,
+      destAmount: minDestAmount.toString(),
+      priceRoute: params.priceRoute,
+      userAddress: params.userAddress,
+      partner: "cryptovault",
+      srcDecimals: params.priceRoute.srcDecimals,
+      destDecimals: params.priceRoute.destDecimals,
+    };
+
+    const res = await fetch(
+      `${PARASWAP_API}/transactions/${psNetwork}?ignoreChecks=true`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("[paraswap] Build tx error:", errBody);
+      return { success: false, error: `Failed to build transaction: ${res.status}` };
+    }
+
+    const txData = await res.json();
+    if (txData.error) {
+      return { success: false, error: txData.error };
     }
 
     return {
       success: true,
-      data: userOrders,
+      data: {
+        to: txData.to,
+        data: txData.data,
+        value: txData.value,
+        chainId: txData.chainId,
+        gasPrice: txData.gasPrice,
+      },
     };
   } catch (error) {
-    console.error("Get user orders error:", error);
+    console.error("[paraswap] buildTx error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get orders",
-      data: [],
+      error: error instanceof Error ? error.message : "Build transaction failed",
+    };
+  }
+}
+
+// ── Jupiter (Solana) ────────────────────────────────────────────────
+
+export interface JupiterQuote {
+  inputMint: string;
+  inAmount: string;
+  outputMint: string;
+  outAmount: string;
+  priceImpactPct: string;
+  routePlan: any[];
+  swapUsdValue: string;
+  otherAmountThreshold: string;
+  slippageBps: number;
+}
+
+/**
+ * Get a swap quote from Jupiter (Solana).
+ */
+export async function getJupiterQuote(params: {
+  inputMint: string;
+  outputMint: string;
+  amount: string;
+  slippageBps?: number;
+}): Promise<ApiResponse<JupiterQuote>> {
+  try {
+    const url = new URL(`${JUPITER_API}/quote`);
+    url.searchParams.set("inputMint", params.inputMint);
+    url.searchParams.set("outputMint", params.outputMint);
+    url.searchParams.set("amount", params.amount);
+    url.searchParams.set("slippageBps", String(params.slippageBps ?? 50));
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("[jupiter] Quote error:", errBody);
+      return { success: false, error: `Jupiter quote failed: ${res.status}` };
+    }
+
+    const data = await res.json();
+    if (data.error) {
+      return { success: false, error: data.error };
+    }
+
+    return {
+      success: true,
+      data: {
+        inputMint: data.inputMint,
+        inAmount: data.inAmount,
+        outputMint: data.outputMint,
+        outAmount: data.outAmount,
+        priceImpactPct: data.priceImpactPct,
+        routePlan: data.routePlan,
+        swapUsdValue: data.swapUsdValue || "0",
+        otherAmountThreshold: data.otherAmountThreshold,
+        slippageBps: data.slippageBps,
+      },
+    };
+  } catch (error) {
+    console.error("[jupiter] getQuote error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Jupiter quote failed",
     };
   }
 }
 
 /**
- * Create a new order
+ * Build a swap transaction for Jupiter (Solana).
+ * Returns a serialized transaction to sign with Phantom.
  */
-export async function createOrder(
-  userId: string,
-  orderData: {
-    pair: string;
-    type: "market" | "limit" | "stop";
-    side: "buy" | "sell";
-    amount: number;
-    price?: number;
-    stopPrice?: number;
-  },
-): Promise<ApiResponse<Order>> {
+export async function buildJupiterSwap(params: {
+  quoteResponse: any;
+  userPublicKey: string;
+}): Promise<ApiResponse<{ swapTransaction: string }>> {
   try {
-    const userOrders = orders.get(userId) || [];
+    const res = await fetch(`${JUPITER_API}/swap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quoteResponse: params.quoteResponse,
+        userPublicKey: params.userPublicKey,
+        wrapAndUnwrapSol: true,
+        dynamicSlippage: { maxBps: 300 },
+      }),
+    });
 
-    // Calculate total value and fee
-    const price = orderData.price || 43250.5; // Use current market price if market order
-    const totalValue = orderData.amount * price;
-    const fee = totalValue * TRADING_FEE_PERCENTAGE;
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("[jupiter] Swap error:", errBody);
+      return { success: false, error: `Jupiter swap build failed: ${res.status}` };
+    }
 
-    const newOrder: Order = {
-      id: `order-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-      userId,
-      pair: orderData.pair,
-      type: orderData.type,
-      side: orderData.side,
-      amount: orderData.amount,
-      price: orderData.price,
-      stopPrice: orderData.stopPrice,
-      status: orderData.type === "market" ? "filled" : "pending",
-      filledAmount: orderData.type === "market" ? orderData.amount : 0,
-      totalValue,
-      fee,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      filledAt: orderData.type === "market" ? new Date() : undefined,
-    };
-
-    userOrders.push(newOrder);
-    orders.set(userId, userOrders);
-
-    // Create trade if market order
-    if (orderData.type === "market") {
-      await createTradeFromOrder(userId, newOrder);
+    const data = await res.json();
+    if (data.error) {
+      return { success: false, error: data.error };
     }
 
     return {
       success: true,
-      data: newOrder,
-      message: "Order created successfully",
+      data: { swapTransaction: data.swapTransaction },
     };
   } catch (error) {
-    console.error("Create order error:", error);
+    console.error("[jupiter] buildSwap error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to create order",
+      error: error instanceof Error ? error.message : "Jupiter swap build failed",
     };
   }
 }
 
-/**
- * Cancel an order
- */
-export async function cancelOrder(
-  userId: string,
-  orderId: string,
-): Promise<ApiResponse<Order>> {
+// ── Market Stats (CoinGecko — kept from previous version) ──────────
+
+const PAIR_TO_COINGECKO: Record<string, string> = {
+  "BTC/USDT": "bitcoin",
+  "ETH/USDT": "ethereum",
+  "BNB/USDT": "binancecoin",
+  "SOL/USDT": "solana",
+  "ADA/USDT": "cardano",
+};
+
+interface PriceCache {
+  prices: Record<string, any>;
+  timestamp: number;
+}
+let priceCache: PriceCache | null = null;
+const PRICE_CACHE_TTL = 60_000;
+
+async function fetchLivePrices(): Promise<Record<string, any>> {
+  if (priceCache && Date.now() - priceCache.timestamp < PRICE_CACHE_TTL) {
+    return priceCache.prices;
+  }
   try {
-    const userOrders = orders.get(userId) || [];
-    const order = userOrders.find((o) => o.id === orderId);
-
-    if (!order) {
-      return {
-        success: false,
-        error: "Order not found",
-      };
-    }
-
-    if (order.status === "filled") {
-      return {
-        success: false,
-        error: "Cannot cancel filled order",
-      };
-    }
-
-    order.status = "cancelled";
-    order.updatedAt = new Date();
-
-    orders.set(userId, userOrders);
-
-    return {
-      success: true,
-      data: order,
-      message: "Order cancelled successfully",
-    };
-  } catch (error) {
-    console.error("Cancel order error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to cancel order",
-    };
+    const ids = Object.values(PAIR_TO_COINGECKO).join(",");
+    const apiKey = process.env.NEXT_PUBLIC_COINGECKO_API_KEY || "";
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true${apiKey ? `&x_cg_demo_api_key=${apiKey}` : ""}`;
+    const res = await fetch(url, { next: { revalidate: 60 } });
+    if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+    const data = await res.json();
+    priceCache = { prices: data, timestamp: Date.now() };
+    return data;
+  } catch {
+    return {};
   }
 }
 
-/**
- * Get user's trade history
- */
-export async function getTradeHistory(
-  userId: string,
-  limit?: number,
-): Promise<ApiResponse<Trade[]>> {
-  try {
-    let userTrades = trades.get(userId) || [];
-
-    // Sort by date desc
-    userTrades.sort((a, b) => b.executedAt.getTime() - a.executedAt.getTime());
-
-    if (limit) {
-      userTrades = userTrades.slice(0, limit);
-    }
-
-    return {
-      success: true,
-      data: userTrades,
-    };
-  } catch (error) {
-    console.error("Get trade history error:", error);
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to get trade history",
-      data: [],
-    };
-  }
-}
-
-/**
- * Create trade from order
- */
-async function createTradeFromOrder(
-  userId: string,
-  order: Order,
-): Promise<void> {
-  const userTrades = trades.get(userId) || [];
-
-  const newTrade: Trade = {
-    id: `trade-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-    orderId: order.id,
-    userId,
-    pair: order.pair,
-    side: order.side,
-    amount: order.amount,
-    price: order.price || order.totalValue / order.amount,
-    totalValue: order.totalValue,
-    fee: order.fee,
-    executedAt: new Date(),
-  };
-
-  userTrades.push(newTrade);
-  trades.set(userId, userTrades);
-}
-
-/**
- * Get order book (mock data)
- */
-export async function getOrderBook(pair: string): Promise<
+export async function getTradingStats(pair: string): Promise<
   ApiResponse<{
-    bids: Array<{ price: number; amount: number; total: number }>;
-    asks: Array<{ price: number; amount: number; total: number }>;
+    volume24h: number;
+    lastPrice: number;
+    high24h: number;
+    low24h: number;
+    priceChange24h: number;
   }>
 > {
   try {
-    // Mock order book data
-    const currentPrice = 43250.5;
+    const prices = await fetchLivePrices();
+    const cgId = PAIR_TO_COINGECKO[pair];
+    const priceData = cgId ? prices[cgId] : null;
+    const lastPrice = priceData?.usd ?? 0;
+    const change = priceData?.usd_24h_change ?? 0;
+    const volume = priceData?.usd_24h_vol ?? 0;
+    const high24h = lastPrice * (1 + Math.abs(change) / 100 / 2);
+    const low24h = lastPrice * (1 - Math.abs(change) / 100 / 2);
 
-    const bids = Array.from({ length: 20 }, (_, i) => {
-      const price = currentPrice - (i + 1) * 10;
-      const amount = Math.random() * 2;
-      return {
-        price,
-        amount,
-        total: price * amount,
-      };
-    });
-
-    const asks = Array.from({ length: 20 }, (_, i) => {
-      const price = currentPrice + (i + 1) * 10;
-      const amount = Math.random() * 2;
-      return {
-        price,
-        amount,
-        total: price * amount,
-      };
-    });
-
-    return {
-      success: true,
-      data: { bids, asks },
-    };
-  } catch (error) {
-    console.error("Get order book error:", error);
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to get order book",
-    };
-  }
-}
-
-/**
- * Get trading statistics
- */
-export async function getTradingStats(userId: string): Promise<
-  ApiResponse<{
-    totalOrders: number;
-    filledOrders: number;
-    totalVolume: number;
-    totalFees: number;
-    profitLoss: number;
-  }>
-> {
-  try {
-    const userOrders = orders.get(userId) || [];
-    const userTrades = trades.get(userId) || [];
-
-    const stats = {
-      totalOrders: userOrders.length,
-      filledOrders: userOrders.filter((o) => o.status === "filled").length,
-      totalVolume: userTrades.reduce((sum, t) => sum + t.totalValue, 0),
-      totalFees: userOrders.reduce((sum, o) => sum + o.fee, 0),
-      profitLoss: 0, // Would calculate based on buy/sell trades
-    };
-
-    return {
-      success: true,
-      data: stats,
-    };
+    return { success: true, data: { volume24h: volume, lastPrice, high24h, low24h, priceChange24h: change } };
   } catch (error) {
     console.error("Get trading stats error:", error);
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to get trading stats",
-    };
+    return { success: false, error: error instanceof Error ? error.message : "Failed to get trading stats" };
   }
 }
