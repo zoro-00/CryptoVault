@@ -19,6 +19,8 @@ import {
   CreditCard,
   LogOut,
   UserCircle,
+  ChevronDown,
+  Globe,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -26,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Sheet,
@@ -49,17 +52,36 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useWallet } from "../hooks/use-wallet";
+import { useSolanaWallet } from "../hooks/use-solana-wallet";
 
 export function CryptoHeader() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const { account, chainId, isConnected: isWalletConnected, connectWallet, disconnectWallet } = useWallet();
+  const {
+    account: evmAccount,
+    chainId,
+    isConnected: evmConnected,
+    connectWallet,
+    disconnectWallet,
+    switchChain,
+    networkName,
+    currencySymbol,
+  } = useWallet();
+  const {
+    account: solAccount,
+    isConnected: solConnected,
+    connectSolana,
+    disconnectSolana,
+  } = useSolanaWallet();
+
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [priceAlerts, setPriceAlerts] = useState(true);
+
+  const anyConnected = evmConnected || solConnected;
 
   // Mock notifications data
   const mockNotifications = [
@@ -100,26 +122,14 @@ export function CryptoHeader() {
     { label: "News", href: "/news" },
   ];
 
-  const getNetworkName = (id: string | null) => {
-    if (!id) return "Unknown";
-    switch (id) {
-      case "0x1": return "Mainnet";
-      case "0xaa36a7": return "Sepolia";
-      case "0x89": return "Polygon";
-      case "0xa4b1": return "Arbitrum";
-      case "0xa": return "Optimism";
-      case "0x38": return "BSC";
-      default: return "Network";
-    }
-  };
-
-  const handleConnectWallet = () => {
-    if (isWalletConnected) {
-      disconnectWallet();
-    } else {
-      connectWallet();
-    }
-  };
+  const chainOptions = [
+    { id: "0x1", label: "Ethereum", icon: "Ξ" },
+    { id: "0x89", label: "Polygon", icon: "⬡" },
+    { id: "0xa4b1", label: "Arbitrum", icon: "🔵" },
+    { id: "0xa", label: "Optimism", icon: "🔴" },
+    { id: "0x38", label: "BSC", icon: "💛" },
+    { id: "0xaa36a7", label: "Sepolia", icon: "🧪" },
+  ];
 
   const handleProfile = () => {
     toast.info("Opening profile settings");
@@ -128,11 +138,23 @@ export function CryptoHeader() {
   const handleSignOut = () => {
     toast.success("Signed out successfully");
     disconnectWallet();
+    disconnectSolana();
   };
 
   const handleSettingsSave = () => {
     toast.success("Settings saved successfully");
     setSettingsOpen(false);
+  };
+
+  // Wallet connection label for the header button
+  const getWalletLabel = () => {
+    if (evmConnected && evmAccount) {
+      return `${evmAccount.slice(0, 6)}...${evmAccount.slice(-4)}`;
+    }
+    if (solConnected && solAccount) {
+      return `${solAccount.slice(0, 4)}...${solAccount.slice(-4)}`;
+    }
+    return null;
   };
 
   return (
@@ -193,9 +215,12 @@ export function CryptoHeader() {
           </div>
 
           {/* Right Side Actions */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             {/* Notifications */}
-            <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+            <Sheet
+              open={notificationsOpen}
+              onOpenChange={setNotificationsOpen}
+            >
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
@@ -383,32 +408,148 @@ export function CryptoHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Connect Wallet Button */}
-            {isWalletConnected && chainId && (
-              <Badge variant="outline" className="hidden lg:flex border-primary text-primary bg-primary/10 mr-2">
-                {getNetworkName(chainId)}
+            {/* Network badge (EVM) */}
+            {evmConnected && chainId && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="hidden lg:flex border-primary text-primary bg-primary/10 cursor-pointer gap-1"
+                  >
+                    {networkName}
+                    <ChevronDown className="h-3 w-3" />
+                  </Badge>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Switch Network</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {chainOptions.map((chain) => (
+                    <DropdownMenuItem
+                      key={chain.id}
+                      onClick={() => switchChain(chain.id)}
+                      className={
+                        chainId === chain.id
+                          ? "bg-primary/10 text-primary"
+                          : ""
+                      }
+                    >
+                      <span className="mr-2">{chain.icon}</span>
+                      {chain.label}
+                      {chainId === chain.id && (
+                        <Badge className="ml-auto text-xs" variant="default">
+                          ✓
+                        </Badge>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Solana badge */}
+            {solConnected && (
+              <Badge
+                variant="outline"
+                className="hidden lg:flex border-purple-500 text-purple-400 bg-purple-500/10"
+              >
+                Solana
               </Badge>
             )}
-            <Button
-              className={`hidden sm:flex ${
-                isWalletConnected
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-primary hover:bg-primary/90"
-              } text-primary-foreground`}
-              onClick={handleConnectWallet}
-            >
-              {isWalletConnected && account ? (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  {`${account.slice(0, 6)}...${account.slice(-4)}`}
-                </>
-              ) : (
-                <>
-                  <Wallet className="h-4 w-4 mr-2" />
-                  Connect Wallet
-                </>
-              )}
-            </Button>
+
+            {/* Connect Wallet Dropdown */}
+            {anyConnected ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="hidden sm:flex bg-green-600 hover:bg-green-700 text-primary-foreground gap-2">
+                    <Check className="h-4 w-4" />
+                    {getWalletLabel()}
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {evmConnected && evmAccount && (
+                    <>
+                      <DropdownMenuLabel className="flex items-center gap-2">
+                        <span>🦊</span> MetaMask
+                        <Badge variant="outline" className="ml-auto text-xs border-green-500 text-green-500">
+                          Connected
+                        </Badge>
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem className="text-xs text-muted-foreground">
+                        {evmAccount}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-400"
+                        onClick={disconnectWallet}
+                      >
+                        Disconnect MetaMask
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  {solConnected && solAccount && (
+                    <>
+                      <DropdownMenuLabel className="flex items-center gap-2">
+                        <span>👻</span> Phantom
+                        <Badge variant="outline" className="ml-auto text-xs border-purple-500 text-purple-500">
+                          Connected
+                        </Badge>
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem className="text-xs text-muted-foreground">
+                        {solAccount.slice(0, 20)}...
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-400"
+                        onClick={disconnectSolana}
+                      >
+                        Disconnect Phantom
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  {!evmConnected && (
+                    <DropdownMenuItem onClick={connectWallet}>
+                      <Wallet className="h-4 w-4 mr-2" />
+                      Connect MetaMask
+                    </DropdownMenuItem>
+                  )}
+                  {!solConnected && (
+                    <DropdownMenuItem onClick={connectSolana}>
+                      <Globe className="h-4 w-4 mr-2" />
+                      Connect Phantom (Solana)
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="hidden sm:flex bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+                    <Wallet className="h-4 w-4" />
+                    Connect Wallet
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Choose Wallet</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={connectWallet}>
+                    <span className="mr-2">🦊</span>
+                    MetaMask
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      EVM
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={connectSolana}>
+                    <span className="mr-2">👻</span>
+                    Phantom
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      Solana
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             {/* Mobile Menu */}
             <Button
@@ -466,31 +607,65 @@ export function CryptoHeader() {
                   {link.label}
                 </Link>
               ))}
-              <div className="pt-2">
+
+              {/* Mobile wallet buttons */}
+              <div className="pt-2 space-y-2">
                 <Button
                   className={`w-full ${
-                    isWalletConnected
+                    evmConnected
                       ? "bg-green-600 hover:bg-green-700"
                       : "bg-primary hover:bg-primary/90"
                   } text-primary-foreground`}
-                  onClick={handleConnectWallet}
+                  onClick={evmConnected ? disconnectWallet : connectWallet}
                 >
-                  {isWalletConnected && account ? (
+                  {evmConnected && evmAccount ? (
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center">
                         <Check className="h-4 w-4 mr-2" />
-                        {`${account.slice(0, 6)}...${account.slice(-4)}`}
+                        {`${evmAccount.slice(0, 6)}...${evmAccount.slice(-4)}`}
                       </div>
                       {chainId && (
-                        <Badge variant="outline" className="border-green-400 text-white bg-green-500/20 text-xs">
-                          {getNetworkName(chainId)}
+                        <Badge
+                          variant="outline"
+                          className="border-green-400 text-white bg-green-500/20 text-xs"
+                        >
+                          {networkName}
                         </Badge>
                       )}
                     </div>
                   ) : (
                     <>
                       <Wallet className="h-4 w-4 mr-2" />
-                      Connect Wallet
+                      Connect MetaMask
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className={`w-full ${
+                    solConnected
+                      ? "border-purple-500 bg-purple-500/10 text-purple-400"
+                      : "border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+                  }`}
+                  onClick={solConnected ? disconnectSolana : connectSolana}
+                >
+                  {solConnected && solAccount ? (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center">
+                        <Check className="h-4 w-4 mr-2" />
+                        {`${solAccount.slice(0, 4)}...${solAccount.slice(-4)}`}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="border-purple-400 text-purple-400 bg-purple-500/20 text-xs"
+                      >
+                        Solana
+                      </Badge>
+                    </div>
+                  ) : (
+                    <>
+                      <Globe className="h-4 w-4 mr-2" />
+                      Connect Phantom
                     </>
                   )}
                 </Button>
