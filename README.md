@@ -1,176 +1,171 @@
 # 🚀 CryptoVault
 
-A modern, real-time cryptocurrency dashboard built with Next.js 14, featuring live market data, advanced charts, portfolio tracking, and trading capabilities.
+A comprehensive **Web3 cryptocurrency platform** built with Next.js 14. CryptoVault bridges traditional finance and decentralized finance (DeFi) — combining real-time market data, cross-chain portfolio tracking, decentralized swaps, and a native fiat-to-crypto on-ramp powered by Transak.
 
-![CryptoVault](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js)
+![Next.js 14](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?style=flat-square&logo=tailwind-css)
+![Web3](https://img.shields.io/badge/Web3-MetaMask_&_Phantom-purple?style=flat-square)
+![Transak](https://img.shields.io/badge/On--Ramp-Transak-1eb67e?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-
-## ✨ Features
-
-### 🌟 Core Features
-- **Real-Time Market Data** - Live cryptocurrency prices powered by CoinGecko API
-- **Interactive Price Charts** - Beautiful, responsive charts with multiple timeframes (24H, 7D, 30D, 90D)
-- **Portfolio Management** - Track your crypto holdings and P/L in real-time
-- **Trading Interface** - Simulated trading with order book, market/limit orders, and trade history
-- **Crypto News** - Latest news articles with sentiment analysis and category filters
-- **Advanced Search** - Search across 1000+ cryptocurrencies
-
-### 🎨 UI/UX
-- **Modern Dark Theme** - Sleek glassmorphic design with gradient accents
-- **Fully Responsive** - Optimized for desktop, tablet, and mobile devices
-- **Smooth Animations** - Polished micro-interactions and transitions
-- **Accessibility** - WCAG compliant with keyboard navigation support
-
-### 🔧 Technical
-- **Type-Safe** - Full TypeScript implementation
-- **Server Components** - Leveraging Next.js 14 App Router
-- **Optimized Performance** - Fast page loads and smooth interactions
-- **Error Handling** - Comprehensive error states and loading fallbacks
-
-## 🛠️ Tech Stack
-
-- **Framework:** [Next.js 14](https://nextjs.org/) (App Router)
-- **Language:** [TypeScript](https://www.typescriptlang.org/)
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
-- **UI Components:** [shadcn/ui](https://ui.shadcn.com/)
-- **Charts:** [Recharts](https://recharts.org/)
-- **Forms:** [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/)
-- **API:** [CoinGecko API](https://www.coingecko.com/en/api)
-- **Icons:** [Lucide React](https://lucide.dev/)
-- **Notifications:** [Sonner](https://sonner.emilkowal.ski/)
-
-## 📦 Installation
-
-### Prerequisites
-- Node.js 18+ and npm
-- CoinGecko API key ([get one here](https://www.coingecko.com/en/api))
-
-### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/zoro-00/CryptoVault.git
-   cd CryptoVault
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
-
-4. **Add your CoinGecko API key to `.env.local`**
-   ```env
-   NEXT_PUBLIC_COINGECKO_API_KEY=your-api-key-here
-   ```
-
-5. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-6. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-## 🚀 Usage
-
-### Development
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run lint         # Run ESLint
-```
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NEXT_PUBLIC_COINGECKO_API_KEY` | CoinGecko API key for real-time data | Yes |
-| `NEXT_PUBLIC_APP_NAME` | Custom app name (default: CryptoVault) | No |
-
-## 📱 Pages
-
-- **`/`** - Homepage with hero section, top cryptocurrencies, and Bitcoin price chart
-- **`/markets`** - Complete market overview with sortable cryptocurrency table
-- **`/trading`** - Trading interface with order placement and history
-- **`/portfolio`** - Portfolio management and performance tracking
-- **`/news`** - Cryptocurrency news with filters and search
-
-## 🏗️ Project Structure
-
-```
-CryptoVault/
-├── app/                      # Next.js app directory
-│   ├── api/                  # API routes
-│   │   ├── markets/         # Market data endpoints
-│   │   ├── news/            # News endpoints
-│   │   ├── portfolio/       # Portfolio endpoints
-│   │   └── trading/         # Trading endpoints
-│   ├── markets/             # Markets page
-│   ├── news/                # News page
-│   ├── portfolio/           # Portfolio page
-│   ├── trading/             # Trading page
-│   ├── globals.css          # Global styles
-│   ├── layout.tsx           # Root layout
-│   └── page.tsx             # Homepage
-├── components/              # React components
-│   ├── ui/                  # shadcn/ui components
-│   ├── crypto-header.tsx    # Navigation header
-│   ├── crypto-hero.tsx      # Hero section
-│   ├── market-overview.tsx  # Market stats cards
-│   └── price-chart.tsx      # Bitcoin price chart
-├── lib/                     # Utilities and libraries
-│   ├── api/                 # API service modules
-│   ├── types/               # TypeScript types
-│   ├── crypto-api.ts        # CoinGecko API client
-│   ├── validation.ts        # Zod schemas
-│   └── utils.ts             # Helper functions
-└── public/                  # Static assets
-```
-
-## 🔌 API Documentation
-
-The app includes mock API routes for demonstration purposes. For production use, replace these with your backend:
-
-- **Markets API** - `/api/markets` - Market data and global statistics
-- **Trading API** - `/api/trading` - Order management and trade execution
-- **Portfolio API** - `/api/portfolio` - Portfolio CRUD operations
-- **News API** - `/api/news` - Cryptocurrency news articles
-- **Search API** - `/api/search` - Multi-resource search
-
-See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for detailed endpoint specifications.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [CoinGecko](https://www.coingecko.com/) for providing the cryptocurrency data API
-- [shadcn/ui](https://ui.shadcn.com/) for the beautiful UI components
-- [Vercel](https://vercel.com/) for Next.js and hosting platform
-
-## 📧 Contact
-
-Created by [@zoro-00](https://github.com/zoro-00)
 
 ---
 
-**⭐ If you like this project, please give it a star on GitHub!**
+## ✨ Features
+
+### 🔌 Non-Custodial Wallet Integration
+- Connect **MetaMask** (EVM — Ethereum, Polygon, Arbitrum, Optimism, BSC) and **Phantom** (Solana)
+- Live native balance display with one-click chain switching
+- Wallet address displayed in profile badge — no passwords, no custodians
+
+### 📊 Real-Time Market Data
+- Live crypto rates powered by the **CoinGecko API**
+- Interactive price charts with **24H / 7D / 30D / 90D** timeframes built in Recharts
+- Full market table with volume, 24h change, and market cap — 1,000+ assets
+
+### 💱 Decentralized Swaps
+- **EVM swaps** via **ParaSwap** — deep aggregated liquidity across DEXes
+- **Solana swaps** via **Jupiter** — best-route SPL token swaps
+- Real token approval flow, slippage control, and live balance validation
+
+### 💳 Fiat On-Ramp (Buy Crypto)
+- Purchase **ETH, BTC, or SOL** directly with a credit/debit card via **Transak**
+- Live price calculation using CoinGecko market rates
+- Wallet address auto-filled from connected MetaMask — non-custodial delivery
+- Saved payment methods persist across sessions via `localStorage`
+
+### 🔔 Live Notifications
+- Real market pulse alerts powered by live CoinGecko data
+- Unread badge counter, "Mark all as read", and toast delivery
+- Notification preferences persistent via `localStorage`
+
+### 👤 Profile Management
+- Edit display name and email — persisted to `localStorage` across reloads
+- Linked wallet address badge in profile drawer
+- **Settings** tab: toggle notifications and price alerts
+- **Payment** tab: add/remove saved cards (persisted in `localStorage`)
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technology |
+|---|---|
+| **Framework** | Next.js 14 (App Router), React 18, TypeScript 5 |
+| **Styling / UI** | Tailwind CSS, shadcn/ui, Radix Primitives, Sonner (toasts) |
+| **Web3 (EVM)** | Ethers.js, Alchemy SDK, MetaMask (`window.ethereum`) |
+| **Web3 (Solana)** | `@solana/web3.js`, Phantom (`window.solana`) |
+| **DEX Aggregators** | ParaSwap API (EVM), Jupiter API (Solana) |
+| **Market Data** | CoinGecko REST API |
+| **Charts** | Recharts |
+| **Fiat On-Ramp** | Transak (staging + production) |
+
+---
+
+## 📦 Getting Started
+
+### Prerequisites
+
+- Node.js **18+** and `npm`
+- [MetaMask](https://metamask.io/) browser extension
+- [Phantom](https://phantom.app/) browser extension *(for Solana)*
+- API keys (see environment setup below)
+
+### Installation
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/zoro-00/CryptoVault.git
+cd CryptoVault
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure environment variables
+cp .env.example .env.local   # or create .env.local manually
+
+# 4. Start the dev server
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+---
+
+### 🔑 Environment Variables
+
+Create a `.env.local` file in the project root and add the following keys:
+
+```env
+# CoinGecko — Market data (free tier available)
+# https://www.coingecko.com/en/api
+NEXT_PUBLIC_COINGECKO_API_KEY=your_coingecko_key
+
+# Alchemy — On-chain wallet portfolio data
+# https://www.alchemy.com/
+ALCHEMY_API_KEY=your_alchemy_key
+
+# Transak — Fiat to crypto on-ramp (staging sandbox)
+# Register free at https://dashboard.transak.com
+# Click "Add New Integration" → "On-Ramp" → "Staging"
+NEXT_PUBLIC_TRANSAK_API_KEY=your_transak_staging_key
+
+# App Config
+NEXT_PUBLIC_APP_NAME=CryptoVault
+NEXT_PUBLIC_DEFAULT_CURRENCY=usd
+NEXT_PUBLIC_MARKET_REFRESH_INTERVAL=60000
+NEXT_PUBLIC_HERO_REFRESH_INTERVAL=30000
+NEXT_PUBLIC_DEFAULT_CRYPTO_LIMIT=10
+```
+
+---
+
+## 🌐 Application Routes
+
+| Route | Description |
+|---|---|
+| `/` | Dashboard hero, live BTC ticker, and market spotlights |
+| `/markets` | Full sortable asset table with live prices and 24h data |
+| `/portfolio` | Connect MetaMask/Phantom, view on-chain ERC-20 tokens |
+| `/swap` | Decentralized token swaps (ParaSwap for EVM, Jupiter for Solana) |
+| `/buy` | Fiat on-ramp — purchase ETH/BTC/SOL with card via Transak |
+| `/news` | Aggregated crypto news feed |
+
+---
+
+## 💳 Using the Fiat On-Ramp (Buy Page)
+
+1. Navigate to `/buy`
+2. Connect your MetaMask wallet (your address is auto-filled as the delivery address)
+3. Enter a USD amount (minimum $30)
+4. Select your desired cryptocurrency (ETH, BTC, or SOL)
+5. Click **"Buy via Transak"** — a secure Transak popup will open
+6. Use the sandbox test card to complete the purchase:
+
+```
+Card Number : 4111 1111 1111 1111
+Expiry      : 12/26
+CVV         : 123
+```
+
+> **Note:** The Transak staging key must be set in `.env.local` before this feature is active. Register free at [dashboard.transak.com](https://dashboard.transak.com).
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Commit your changes: `git commit -m 'feat: add my feature'`
+4. Push to the branch: `git push origin feature/my-feature`
+5. Open a Pull Request
+
+---
+
+## 🙏 Acknowledgments
+
+- **Alchemy** — Enterprise-grade on-chain node infrastructure
+- **CoinGecko** — Market data backbone
+- **ParaSwap & Jupiter** — DEX aggregation and deep liquidity routing
+- **Transak** — Regulated fiat-to-crypto on-ramp gateway
+- **Vercel** — Edge deployment platform

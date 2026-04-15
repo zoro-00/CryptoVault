@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -76,37 +82,105 @@ export function CryptoHeader() {
   } = useSolanaWallet();
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState("profile");
+  const [profileData, setProfileData] = useState({ name: "Loading...", email: "", id: "demo-user" });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<{id: number, last4: string, brand: string}[]>([]);
+  const [isAddingPayment, setIsAddingPayment] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [priceAlerts, setPriceAlerts] = useState(true);
+  const [notificationItems, setNotificationItems] = useState<{id: number, title: string, message: string, time: string, read: boolean}[]>([]);
+
+  const unreadCount = notificationItems.filter((n) => !n.read).length;
+
+  const markAllAsRead = () => {
+    setNotificationItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    toast.success("All notifications marked as read");
+  };
+
+  useEffect(() => {
+    // Load local settings
+    const savedSettings = localStorage.getItem("cryptoVaultSettings");
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        if (typeof parsed.notifications === "boolean") setNotifications(parsed.notifications);
+        if (typeof parsed.priceAlerts === "boolean") setPriceAlerts(parsed.priceAlerts);
+      } catch (e) {
+        console.error("Failed to parse settings", e);
+      }
+    }
+    
+    // Load local payment methods
+    const savedCards = localStorage.getItem("cryptoVaultCards");
+    if (savedCards) {
+      try {
+        setPaymentMethods(JSON.parse(savedCards));
+      } catch (e) {
+        console.error("Failed to parse cards", e);
+      }
+    }
+    
+    // Fetch profile data from backend or LocalStorage
+    const savedProfile = localStorage.getItem("cryptoVaultProfile");
+    if (savedProfile) {
+      try {
+        setProfileData(JSON.parse(savedProfile));
+      } catch (e) {
+        console.error("Failed to parse profile", e);
+      }
+    } else {
+      fetch("/api/user?demo=true")
+        .then(res => res.json())
+        .then(res => {
+          if (res.success && res.data) {
+            setProfileData({
+              name: res.data.name || "CryptoVault User",
+              email: res.data.email || "user@example.com",
+              id: res.data.id || "demo-user"
+            });
+          }
+        })
+        .catch(err => console.error("Failed to fetch profile", err));
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch a real market notification a few seconds after connecting
+    const demoTimer = setTimeout(() => {
+      fetch("/api/trading?pair=BTC/USDT")
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.data) {
+                const btcStats = data.data;
+                const price = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(btcStats.lastPrice);
+                const high = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(btcStats.high24h);
+                
+                setNotificationItems(prev => [
+                    {
+                        id: Date.now(),
+                        title: "Live BTC Market Pulse",
+                        message: `Bitcoin is trading at ${price}. The 24h high was ${high}.`,
+                        time: "Just now",
+                        read: false
+                    },
+                    ...prev
+                ]);
+                toast("🔔 Live Market Update", {
+                    description: `Bitcoin is currently trading at ${price}`,
+                });
+            }
+        })
+        .catch(err => console.error("Failed to fetch live notification", err));
+    }, 6000);
+
+    return () => clearTimeout(demoTimer);
+  }, []);
 
   const anyConnected = evmConnected || solConnected;
 
-  // Mock notifications data
-  const mockNotifications = [
-    {
-      id: 1,
-      title: "Bitcoin Alert",
-      message: "BTC reached $50,000!",
-      time: "2 min ago",
-      read: false,
-    },
-    {
-      id: 2,
-      title: "Portfolio Update",
-      message: "Your portfolio is up 5.2% today",
-      time: "1 hour ago",
-      read: false,
-    },
-    {
-      id: 3,
-      title: "New Feature",
-      message: "Check out our new staking feature",
-      time: "3 hours ago",
-      read: true,
-    },
-  ];
+
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +192,8 @@ export function CryptoHeader() {
   const navLinks = [
     { label: "Markets", href: "/markets", icon: TrendingUp },
     { label: "Portfolio", href: "/portfolio", icon: Wallet },
-    { label: "Trading", href: "/trading" },
+    { label: "Swap", href: "/swap" },
+    { label: "Buy", href: "/buy" },
     { label: "News", href: "/news" },
   ];
 
@@ -131,8 +206,9 @@ export function CryptoHeader() {
     { id: "0xaa36a7", label: "Sepolia", icon: "🧪" },
   ];
 
-  const handleProfile = () => {
-    toast.info("Opening profile settings");
+  const openProfileDialog = (tab: string) => {
+    setProfileTab(tab);
+    setProfileOpen(true);
   };
 
   const handleSignOut = () => {
@@ -141,9 +217,44 @@ export function CryptoHeader() {
     disconnectSolana();
   };
 
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    try {
+      // Sync locally to survive dev server hot-reloads mapping to the ephemeral mock API
+      localStorage.setItem("cryptoVaultProfile", JSON.stringify({
+        name: profileData.name,
+        email: profileData.email,
+        id: profileData.id
+      }));
+
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: profileData.id,
+          name: profileData.name,
+          email: profileData.email
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Profile saved securely");
+        setProfileOpen(false);
+      } else {
+        toast.error("Failed to update profile");
+      }
+    } catch (e) {
+      toast.error("Network error saving profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   const handleSettingsSave = () => {
+    const settings = { notifications, priceAlerts };
+    localStorage.setItem("cryptoVaultSettings", JSON.stringify(settings));
     toast.success("Settings saved successfully");
-    setSettingsOpen(false);
+    setProfileOpen(false);
   };
 
   // Wallet connection label for the header button
@@ -228,7 +339,9 @@ export function CryptoHeader() {
                   className="text-foreground hover:text-primary relative"
                 >
                   <Bell className="h-5 w-5" />
-                  <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
+                  )}
                 </Button>
               </SheetTrigger>
               <SheetContent>
@@ -239,7 +352,7 @@ export function CryptoHeader() {
                   </SheetDescription>
                 </SheetHeader>
                 <div className="mt-6 space-y-4">
-                  {mockNotifications.map((notification) => (
+                  {notificationItems.map((notification) => (
                     <div
                       key={notification.id}
                       className={`p-4 rounded-lg border ${
@@ -272,85 +385,173 @@ export function CryptoHeader() {
                 <Button
                   variant="outline"
                   className="w-full mt-4"
-                  onClick={() =>
-                    toast.success("All notifications marked as read")
-                  }
+                  onClick={markAllAsRead}
+                  disabled={unreadCount === 0}
                 >
                   Mark all as read
                 </Button>
               </SheetContent>
             </Sheet>
 
-            {/* Settings */}
-            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-foreground hover:text-primary"
-                >
-                  <Settings className="h-5 w-5" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+            {/* Profile Dialog */}
+            <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+              <DialogContent className="sm:max-w-[525px]">
                 <DialogHeader>
-                  <DialogTitle>Settings</DialogTitle>
+                  <DialogTitle>Account Management</DialogTitle>
                   <DialogDescription>
-                    Manage your account settings and preferences
+                    Manage your profile, settings, and security preferences
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="dark-mode">Dark Mode</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Toggle dark theme
-                      </p>
+                
+                <Tabs value={profileTab} onValueChange={setProfileTab} className="w-full mt-4">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="profile">Profile</TabsTrigger>
+                    <TabsTrigger value="settings">Settings</TabsTrigger>
+                    <TabsTrigger value="payment">Payment</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="profile" className="space-y-4 py-4 border-none">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
+                          <UserCircle className="h-8 w-8 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-lg text-foreground">{profileData.name}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-sm text-muted-foreground">Joined April 2026</p>
+                            {evmConnected && evmAccount && (
+                              <Badge variant="outline" className="text-xs border-green-500/30 text-green-500 bg-green-500/10">
+                                {evmAccount.slice(0, 6)}...{evmAccount.slice(-4)}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Display Name</Label>
+                        <Input value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input value={profileData.email} onChange={(e) => setProfileData({...profileData, email: e.target.value})} type="email" />
+                      </div>
                     </div>
-                    <Switch
-                      id="dark-mode"
-                      checked={darkMode}
-                      onCheckedChange={setDarkMode}
-                    />
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="notifications">Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive push notifications
-                      </p>
+                    <div className="flex justify-end gap-2 mt-6">
+                      <Button variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button>
+                      <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+                        {isSavingProfile ? "Saving..." : "Save Profile"}
+                      </Button>
                     </div>
-                    <Switch
-                      id="notifications"
-                      checked={notifications}
-                      onCheckedChange={setNotifications}
-                    />
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="price-alerts">Price Alerts</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Get alerted on price changes
-                      </p>
+                  </TabsContent>
+                  
+                  <TabsContent value="settings" className="space-y-6 py-4 border-none">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="notifications-tab">Notifications</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Receive push notifications
+                        </p>
+                      </div>
+                      <Switch
+                        id="notifications-tab"
+                        checked={notifications}
+                        onCheckedChange={setNotifications}
+                      />
                     </div>
-                    <Switch
-                      id="price-alerts"
-                      checked={priceAlerts}
-                      onCheckedChange={setPriceAlerts}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setSettingsOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSettingsSave}>Save Changes</Button>
-                </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="price-alerts-tab">Price Alerts</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Get alerted on price changes
+                        </p>
+                      </div>
+                      <Switch
+                        id="price-alerts-tab"
+                        checked={priceAlerts}
+                        onCheckedChange={setPriceAlerts}
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                      <Button variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button>
+                      <Button onClick={handleSettingsSave}>Save Settings</Button>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="payment" className="space-y-4 py-4 border-none">
+                    {isAddingPayment ? (
+                      <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <h3 className="font-medium text-foreground">Add New Payment Method</h3>
+                        <div className="space-y-2">
+                          <Label>Name on Card</Label>
+                          <Input placeholder="John Doe" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Card Number</Label>
+                          <Input placeholder="**** **** **** ****" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Expiry Date</Label>
+                            <Input placeholder="MM/YY" />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CVC</Label>
+                            <Input placeholder="123" type="password" maxLength={3} />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                          <Button variant="outline" onClick={() => setIsAddingPayment(false)}>Cancel</Button>
+                          <Button onClick={() => {
+                            const newMethods = [...paymentMethods, { id: Date.now(), last4: Math.floor(1000 + Math.random() * 9000).toString(), brand: "Visa" }];
+                            setPaymentMethods(newMethods);
+                            localStorage.setItem("cryptoVaultCards", JSON.stringify(newMethods));
+                            setIsAddingPayment(false);
+                            toast.success("Card added successfully");
+                          }}>Save Card</Button>
+                        </div>
+                      </div>
+                    ) : paymentMethods.length > 0 ? (
+                      <div className="space-y-4 animate-in fade-in duration-300">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-medium text-foreground">Saved Cards</h3>
+                          <Button size="sm" variant="outline" onClick={() => setIsAddingPayment(true)}>Add New</Button>
+                        </div>
+                        {paymentMethods.map((method) => (
+                          <div key={method.id} className="flex items-center justify-between p-4 border rounded-lg bg-card/50">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-14 bg-primary/10 rounded flex items-center justify-center">
+                                <CreditCard className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm text-foreground">{method.brand} ending in {method.last4}</p>
+                                <p className="text-xs text-muted-foreground">Expires 12/28</p>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={() => {
+                              const newMethods = paymentMethods.filter(m => m.id !== method.id);
+                              setPaymentMethods(newMethods);
+                              localStorage.setItem("cryptoVaultCards", JSON.stringify(newMethods));
+                              toast.info("Card removed");
+                            }}>Remove</Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 animate-in fade-in duration-300">
+                        <CreditCard className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-foreground">No Payment Methods</h3>
+                        <p className="text-sm text-muted-foreground mt-1 mb-4">
+                          Add a credit card or bank account to buy crypto directly.
+                        </p>
+                        <Button onClick={() => setIsAddingPayment(true)}>
+                          Add Payment Method
+                        </Button>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </DialogContent>
             </Dialog>
 
@@ -371,28 +572,22 @@ export function CryptoHeader() {
               >
                 <DropdownMenuItem
                   className="text-foreground hover:bg-muted cursor-pointer"
-                  onClick={handleProfile}
+                  onClick={() => openProfileDialog("profile")}
                 >
                   <UserCircle className="h-4 w-4 mr-2" />
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-foreground hover:bg-muted cursor-pointer"
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => openProfileDialog("settings")}
                 >
                   <Settings className="h-4 w-4 mr-2" />
                   Settings
                 </DropdownMenuItem>
+
                 <DropdownMenuItem
                   className="text-foreground hover:bg-muted cursor-pointer"
-                  onClick={() => toast.info("Opening security settings")}
-                >
-                  <Shield className="h-4 w-4 mr-2" />
-                  Security
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-foreground hover:bg-muted cursor-pointer"
-                  onClick={() => toast.info("Opening payment methods")}
+                  onClick={() => openProfileDialog("payment")}
                 >
                   <CreditCard className="h-4 w-4 mr-2" />
                   Payment Methods

@@ -44,7 +44,7 @@ import {
 } from "@/lib/tokens";
 import { ethers } from "ethers";
 
-export default function TradingPage() {
+export default function SwapPage() {
   const wallet = useWallet();
   const solana = useSolanaWallet();
 
